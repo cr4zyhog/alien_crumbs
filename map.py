@@ -12,4 +12,4 @@ class Map:
         max_width = max(map(len, self.level))
 
         # дополняем каждую строку пустыми клетками ('.')
-        return list(map(lambda x: x.ljust(max_width, '.'), self.level))
+        return list(map(lambda x: x.ljust(max_width, ' '), self.level))
