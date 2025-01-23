@@ -1,9 +1,6 @@
 import pygame
 import math
 
-from numpy.lib.function_base import angle
-from pygame.transform import rotate
-
 from map import Map
 
 pygame.init()
@@ -44,8 +41,10 @@ class Player(pygame.sprite.Sprite):
         self.iter = 0
         super().__init__(player_group)
         self.pos_x = 200
+        self.rel = 0
         self.pos_y = 200
-        self.speed = 50
+        self.speed = 500
+        self.pos_mouse = (0,0)
         self.angle = 0
         self.image = tile_images['player_test'].convert_alpha()
         self.orig = self.image
@@ -57,25 +56,28 @@ class Player(pygame.sprite.Sprite):
 
     def update(self):
         keys = pygame.key.get_pressed()
+        mouse_pos = pygame.mouse.get_pos()
         pos_x = self.pos_x
         pos_y = self.pos_y
-        mx, my = pygame.mouse.get_pos()
-        if mx < 100 or mx > width - 100:
-            pygame.mouse.set_pos([width // 2, height // 2])
-        self.rel = pygame.mouse.get_rel()[0]
-        self.rel = max(-40, min(40, self.rel))
-        self.angle += self.rel * 0.2 * 1
-        self.angle %= math.tau
+        dlin_1 = mouse_pos[1] - pos_y
+        dlin_2 = mouse_pos[0] - pos_x
+        gipoten = math.sqrt(dlin_2 ** 2 + dlin_1 ** 2)
+        if dlin_1 >= 0:
+            self.angle = math.asin(dlin_2/gipoten) * 57.3
+        else:
+            self.angle = 180 - math.asin(dlin_2 / gipoten) * 57.3
         self.rotate()
         sin_a = math.sin(self.angle)
         cos_a = math.cos(self.angle)
         if keys[pygame.K_w]:
-            self.pos_x += self.speed * sin_a
-            self.pos_y += self.speed * cos_a
+            self.pos_x += self.speed / 200 * sin_a
+            self.pos_y += self.speed / 200 * cos_a
         if keys[pygame.K_s]:
-            self.pos_y += self.speed / 200
+            self.pos_x -= self.speed / 200 * sin_a
+            self.pos_y -= self.speed / 200 * cos_a
         if keys[pygame.K_d]:
-            self.pos_x += self.speed / 200
+            self.pos_x += self.speed / 200 * cos_a
+            self.pos_y += self.speed / 200 * sin_a
         if keys[pygame.K_a]:
             self.pos_x -= self.speed / 200
         self.rect = self.image.get_rect(center=(self.pos_x, self.pos_y))
