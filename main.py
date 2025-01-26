@@ -4,7 +4,7 @@ import math
 from map import Map
 
 pygame.init()
-size = width, height = 1920, 1080
+size = width, height = 1280, 720
 screen = pygame.display.set_mode(size)
 tile_width = tile_height = 45
 tile_images = {
@@ -43,51 +43,73 @@ class Player(pygame.sprite.Sprite):
         self.pos_x = 200
         self.rel = 0
         self.pos_y = 200
-        self.speed = 500
+        self.speed = 10
         self.pos_mouse = (0,0)
         self.angle = 0
+        self.new_angle = 0
+        self.gipoten = 0
         self.image = tile_images['player_test'].convert_alpha()
         self.orig = self.image
-        self.rect = self.image.get_rect(center=(self.pos_x, self.pos_y))
+        self.rect = self.image.get_rect(center=(round(self.pos_x), round(self.pos_y)))
+
+    def obnov_mish(self):
+        self.mouse_pos = pygame.mouse.get_pos()
 
     def rotate(self):
-        self.image = pygame.transform.rotozoom(self.orig, self.angle, 1)
-        self.rect = self.image.get_rect(center=self.rect.center)
+        self.image = pygame.transform.rotate(self.orig, self.angle)
+        self.rect = self.image.get_rect(center=(round(self.pos_x), round(self.pos_y)))
 
     def update(self):
         keys = pygame.key.get_pressed()
-        mouse_pos = pygame.mouse.get_pos()
+        self.new_angle = self.angle
         pos_x = self.pos_x
         pos_y = self.pos_y
-        dlin_1 = mouse_pos[1] - pos_y
-        dlin_2 = mouse_pos[0] - pos_x
-        gipoten = math.sqrt(dlin_2 ** 2 + dlin_1 ** 2)
-        if dlin_1 >= 0:
-            self.angle = math.asin(dlin_2/gipoten) * 57.3
-        else:
-            self.angle = 180 - math.asin(dlin_2 / gipoten) * 57.3
-        self.rotate()
-        sin_a = math.sin(self.angle)
-        cos_a = math.cos(self.angle)
         if keys[pygame.K_w]:
-            self.pos_x += self.speed / 200 * sin_a
-            self.pos_y += self.speed / 200 * cos_a
+            self.gipoten -= self.speed
         if keys[pygame.K_s]:
-            self.pos_x -= self.speed / 200 * sin_a
-            self.pos_y -= self.speed / 200 * cos_a
+            self.gipoten += self.speed
         if keys[pygame.K_d]:
-            self.pos_x += self.speed / 200 * cos_a
-            self.pos_y += self.speed / 200 * sin_a
+            self.angle = (self.angle + (200 / self.gipoten)) % 360
         if keys[pygame.K_a]:
-            self.pos_x -= self.speed / 200
-        self.rect = self.image.get_rect(center=(self.pos_x, self.pos_y))
-        for i in wall_group:
-            if pygame.sprite.collide_mask(self, i):
-                if self.pos_y != pos_y:
-                    self.pos_y = pos_y
-                if self.pos_x != pos_x:
-                    self.pos_x = pos_x
-                self.rect = self.image.get_rect(center=(self.pos_x, self.pos_y))
+            self.angle = (self.angle - (200 / self.gipoten)) % 360
+        if keys[pygame.K_UP]:
+            self.mouse_pos = (self.mouse_pos[0], self.mouse_pos[1] - self.speed)
+            self.update_mouse(self.mouse_pos)
+        if keys[pygame.K_DOWN]:
+            self.mouse_pos = (self.mouse_pos[0], self.mouse_pos[1] + self.speed)
+            self.update_mouse(self.mouse_pos)
+        if keys[pygame.K_LEFT]:
+            self.mouse_pos = (self.mouse_pos[0] - self.speed, self.mouse_pos[1])
+            self.update_mouse(self.mouse_pos)
+        if keys[pygame.K_RIGHT]:
+            self.mouse_pos = (self.mouse_pos[0] + self.speed, self.mouse_pos[1])
+            self.update_mouse(self.mouse_pos)
+        center = (pygame.math.Vector2(self.mouse_pos) + pygame.math.Vector2(0, -self.gipoten).rotate(-self.angle))
+        print(center.angle_to(pygame.math.Vector2(self.mouse_pos)))
+        self.rect = self.image.get_rect(center=(round(abs(center.x)), round(abs(center.y))))
+        pygame.draw.line(screen, (255, 0, 0), (0, 0), (self.mouse_pos[0], self.mouse_pos[1]))
+        pygame.draw.line(screen, (0, 255, 0), (0, 0), (pygame.math.Vector2(10, -self.gipoten).rotate(-self.angle).x, pygame.math.Vector2(10, -self.gipoten).rotate(-self.angle).y))
+        pygame.draw.line(screen, (0, 0, 255), (0, 0), (center.x, center.y))
+        self.pos_x = self.rect.centerx
+        self.pos_y = self.rect.centery
+        self.rotate()
+
+
+    def update_mouse(self, mouse_pos):
+            self.mouse_pos = mouse_pos
+            dlin_1 = mouse_pos[1] - self.pos_x
+            dlin_2 = mouse_pos[0] - self.pos_y
+            self.gipoten = math.sqrt(dlin_2 ** 2 + dlin_1 ** 2)
+            if dlin_2 >= 0:
+                try:
+                    self.angle = math.acos(dlin_1 / self.gipoten) * 57.3 % 360
+                except ZeroDivisionError:
+                    self.angle = 0
+            else:
+                try:
+                    self.angle = 360 - math.acos(dlin_1 / self.gipoten) * 57.3 % 360
+                except ZeroDivisionError:
+                    self.angle = 0
 
 
 svobod = []
@@ -128,6 +150,7 @@ if __name__ == '__main__':
     font = pygame.font.SysFont('Consolas', 15, bold=True)
     screen = pygame.display.set_mode(size)
     new_player = Player()
+    new_player.obnov_mish()
     background = pygame.image.load('data/background.jpg')
     screen.blit(background, (0, 0))
     while True:
@@ -138,8 +161,10 @@ if __name__ == '__main__':
                 if event.key == pygame.K_ESCAPE:
                     exit()
                 count = 0
-        new_player.update()
+            if event.type == pygame.MOUSEMOTION:
+                new_player.update_mouse(event.pos)
         all_sprites.draw(screen)
+        new_player.update()
         player_group.draw(screen)
         pygame.display.set_caption(str(int(clock.get_fps())))
         pygame.display.flip()
