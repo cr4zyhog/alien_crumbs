@@ -68,6 +68,7 @@ class Aliens(pygame.sprite.Sprite):
             self.count = 0
         self.look_for_player()
         if not self.see_player:
+            self.acc = pygame.math.Vector2(0, 0)
             self.vel.x += self.speed_x
             self.vel.y += self.speed_y
             self.count += 1
