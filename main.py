@@ -6,7 +6,7 @@ import math
 from map import Map
 
 pygame.init()
-size = width, height = 1920, 1080
+size = width, height = 1280, 720
 screen = pygame.display.set_mode(size)
 tile_width = tile_height = 45
 tile_images = {
@@ -49,7 +49,9 @@ class Aliens(pygame.sprite.Sprite):
         super().__init__(aliens_group)
         self.image = alien_images[0]
         self.vel = pygame.math.Vector2((0, 0))
-        self.pos = pos
+        self.pos = pygame.Vector2(pos)
+        self.vel = pygame.Vector2(0, 0)
+        self.acc = pygame.Vector2(0, 0)
         self.angle = 0
         self.speed_x = vx
         self.speed_y = vy
@@ -66,35 +68,40 @@ class Aliens(pygame.sprite.Sprite):
             self.count = 0
         self.look_for_player()
         if not self.see_player:
-            self.pos = (self.pos[0] + self.speed_x, self.pos[1] + self.speed_y)
+            self.vel.x += self.speed_x
+            self.vel.y += self.speed_y
             self.count += 1
-            self.rect = self.image.get_rect(center=self.pos)
         else:
+            self.acc = pygame.math.Vector2(0, 0)
+            pos_x = new_player.rect.centerx
+            pos_y = new_player.rect.centery
+            player_vec = pygame.math.Vector2(pos_x, pos_y)
+            print((pos_x, pos_y))
+            sin_a = math.sin(self.angle)
+            cos_a = math.cos(self.angle)
+            speed = new_player.speed
+            if player_vec.x > self.pos.x:
+                self.vel.x += speed
+            if player_vec.x < self.pos.x:
+                self.vel.x -= speed
+            if player_vec.y > self.pos.y:
+                self.vel.y += speed
+            if player_vec.y < self.pos.y:
+                self.vel.y -= speed
 
-            dlin_1 = new_player.pos_y - self.pos[1]
-            dlin_2 = new_player.pos_x - self.pos[0]
-            gipoten = math.sqrt(dlin_2 ** 2 + dlin_1 ** 2)
-            if dlin_2 >= 0:
-                try:
-                    self.angle = math.acos(dlin_1 / gipoten) * 57.3 % 360
-                except ZeroDivisionError:
-                    self.angle = 0
-            else:
-                try:
-                    self.angle = 360 - math.acos(dlin_1 / gipoten) * 57.3 % 360
-                except ZeroDivisionError:
-                    self.angle = 0
-            pos_x = new_player.rect.x
-            pos_y = new_player.rect.y
-            if pos_x > self.pos[0]:
-                self.pos = (self.pos[0] + round((new_player.speed * math.sin(self.angle))), self.pos[1])
-            if pos_x < self.pos[0]:
-                self.pos = (self.pos[0] - round((new_player.speed * math.sin(self.angle))), self.pos[1])
-            if pos_y > self.pos[1]:
-                self.pos = (self.pos[0], self.pos[1] + round((new_player.speed * math.cos(self.angle))))
-            if pos_y < self.pos[1]:
-                self.pos = (self.pos[0], self.pos[1] - round((new_player.speed * math.cos(self.angle))))
-            self.rect = self.image.get_rect(center=self.pos)
+        self.acc += self.vel * -0.47
+        # equations of motion
+        self.vel += self.acc
+
+        # first move x then y for better collision detection
+        if self.vel.x != 0:
+            self.pos.x += round(self.vel.x + 0.5 * self.acc.x, 1)
+
+        if self.vel.y != 0:
+            self.pos.y += round(self.vel.y + 0.5 * self.acc.y, 1)
+
+        # set rect to new calculated pos
+        self.rect.center = self.pos
 
     def look_for_player(self):
         if abs(self.pos[0] - new_player.pos_x) <= 200 and abs(self.pos[1] - new_player.pos_y) <= 200:
@@ -134,15 +141,16 @@ class Player(pygame.sprite.Sprite):
 
     def update(self):
         keys = pygame.key.get_pressed()
+        self.update_mouse(pygame.mouse.get_pos())
         self.new_angle = self.angle
         pos_x = self.pos_x
         pos_y = self.pos_y
         if keys[pygame.K_w]:
         # self.gipoten -= self.speed
-            self.pos_y += self.speed
+            self.pos_y -= self.speed
         if keys[pygame.K_s]:
         # self.gipoten += self.speed
-            self.pos_y -= self.speed
+            self.pos_y += self.speed
         if keys[pygame.K_d]:
         # self.angle = (self.angle + (300 / self.gipoten)) % 360
             self.pos_x += self.speed
@@ -249,8 +257,6 @@ if __name__ == '__main__':
                 if event.key == pygame.K_ESCAPE:
                     exit()
                 count = 0
-            if event.type == pygame.MOUSEMOTION:
-                new_player.update_mouse(event.pos)
             if event.type == MYEVENTTYPE:
                 flg_aliens = True
         all_sprites.draw(screen)
