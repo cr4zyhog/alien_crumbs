@@ -24,6 +24,9 @@ tile_images = {
 alien_images = [pygame.image.load('data/aliens/alien1/alien_1.png').convert_alpha(),
                 pygame.image.load('data/aliens/alien1/alien_2.png').convert_alpha()]
 
+bullets_images = [pygame.image.load('data/bullets/pistol_bullet.png').convert_alpha(),
+                  pygame.image.load('data/bullets/avtomat_bullet.png').convert_alpha()]
+
 MYEVENTTYPE = pygame.USEREVENT + 1
 pygame.time.set_timer(MYEVENTTYPE, 250)
 
@@ -129,6 +132,7 @@ class Player(pygame.sprite.Sprite):
         self.angle = 0
         self.new_angle = 0
         self.gipoten = 0
+        self.count = 0
         self.image = tile_images['player_test'].convert_alpha()
         self.orig = self.image
         self.rect = self.image.get_rect(center=(round(self.pos_x), round(self.pos_y)))
@@ -143,9 +147,15 @@ class Player(pygame.sprite.Sprite):
     def update(self):
         keys = pygame.key.get_pressed()
         self.update_mouse(pygame.mouse.get_pos())
+        mouse_keys = pygame.mouse.get_pressed()
         self.new_angle = self.angle
         pos_x = self.pos_x
         pos_y = self.pos_y
+        print(self.count)
+        if mouse_keys[0]:
+            if pygame.time.get_ticks() - self.count >= 300:
+                self.count = pygame.time.get_ticks()
+                self.attack()
         if keys[pygame.K_w]:
         # self.gipoten -= self.speed
             self.pos_y -= self.speed
@@ -194,6 +204,30 @@ class Player(pygame.sprite.Sprite):
             except ZeroDivisionError:
                 self.angle = 0
 
+    def attack(self):
+        Bullets(0, self.angle, self.rect.center)
+
+
+class Bullets(pygame.sprite.Sprite):
+    def __init__(self, type, angle, pos):
+        super().__init__(bullets_group)
+        self.angle = angle
+        self.count = 0
+        self.image = pygame.transform.rotate(bullets_images[type], angle / 57)
+        self.rect = self.image.get_rect(center=pos)
+
+    def update(self):
+        # парился с этой фигней два часа, а почему-то нужно было угол поделить на 57
+        angle = self.angle / 57.3
+        sin_a = math.sin(angle)
+        cos_a = math.cos(angle)
+        x = self.rect.centerx
+        y = self.rect.centery
+        x += (30 * sin_a)
+        y += (30 * cos_a)
+        self.rect = self.image.get_rect(center=(x, y))
+        self.count += 1
+
 
 svobod = []
 tick = 0
@@ -239,6 +273,7 @@ if __name__ == '__main__':
     aliens_group = pygame.sprite.Group()
     empty_group = pygame.sprite.Group()
     wall_group = pygame.sprite.Group()
+    bullets_group = pygame.sprite.Group()
     level_map = Map()
     create_alien()
     generate_level(level_map.load_level())
@@ -263,6 +298,8 @@ if __name__ == '__main__':
         all_sprites.draw(screen)
         new_player.update()
         player_group.draw(screen)
+        bullets_group.update()
+        bullets_group.draw(screen)
         aliens_group.update(flg_aliens)
         aliens_group.draw(screen)
         pygame.display.set_caption(str(int(clock.get_fps())))
