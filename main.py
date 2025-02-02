@@ -1,7 +1,8 @@
 import random
-from itertools import count
 import pygame
 import math
+
+import menu
 import perhod
 from pygame import MOUSEBUTTONDOWN
 from map import Map
@@ -10,6 +11,9 @@ pygame.init()
 size = width, height = 1920, 1080
 screen = pygame.display.set_mode(size)
 tile_width = tile_height = 45
+ship = pygame.transform.scale(pygame.image.load('data/Space/ship/ship.png'),
+                              (175, 175)).convert_alpha()
+ship = pygame.transform.rotate(ship, 270)
 tile_images = {
     'empty': pygame.transform.scale(pygame.image.load('data/pol.png'), (tile_width, tile_height)),
     'wall-gor': pygame.transform.scale(pygame.image.load('data/wall_gorizont.png'), (tile_width, tile_height)),
@@ -72,8 +76,48 @@ sounds = {
     'player_die': pygame.mixer.Sound('data/sounds/player_death.mp3')
 }
 
+tools_images = {
+    'health': pygame.transform.scale(pygame.image.load('data/health.png'), (tile_width, tile_height)),
+    'armor': pygame.image.load('data/armor.png')
+}
+
 MYEVENTTYPE = pygame.USEREVENT + 1
 pygame.time.set_timer(MYEVENTTYPE, 250)
+
+
+class Health(pygame.sprite.Sprite):
+    def __init__(self, tile_type, pos_x, pos_y):
+        super().__init__(health_group)
+        self.image = tools_images[tile_type]
+        self.type = tile_type
+        self.rect = self.image.get_rect().move(
+            tile_width * pos_x, tile_height * pos_y)
+
+    def update(self, dvizh):
+        self.rect = self.image.get_rect().move(self.rect.x - dvizh, self.rect.y)
+
+
+class Armor(pygame.sprite.Sprite):
+    def __init__(self, tile_type, pos_x, pos_y):
+        super().__init__(armor_group)
+        self.image = tools_images[tile_type]
+        self.type = tile_type
+        self.rect = self.image.get_rect().move(
+            tile_width * pos_x, tile_height * pos_y)
+
+    def update(self, dvizh):
+        self.rect = self.image.get_rect().move(self.rect.x - dvizh, self.rect.y)
+
+
+class Ship(pygame.sprite.Sprite):
+    def __init__(self, pos_x, pos_y):
+        super().__init__(ship_group, all_sprites)
+        self.image = ship
+        self.rect = self.image.get_rect().move(
+            tile_width * pos_x, tile_height * pos_y)
+
+    def update(self, dvizh):
+        self.rect = self.image.get_rect().move(self.rect.x - dvizh, self.rect.y)
 
 
 class Weapon(pygame.sprite.Sprite):
@@ -142,15 +186,15 @@ class Aliens(pygame.sprite.Sprite):
         self.hitbox.center = self.rect_orig.center
 
     def update(self, flag=False):
+        pos_x = self.pos.x
+        if pos_x >= 2300 or pos_x <= -380:
+            return 0
         if self.in_hit:
             if self.in_hit_count > 5:
                 self.in_hit = False
                 self.image = alien_images[0]
                 self.in_hit_count = 0
             self.in_hit_count += 1
-        pos_x = self.pos.x
-        if pos_x >= 2300 or pos_x <= -380:
-            return 0
         if flag:
             self.update_image()
         if self.count == 75:
@@ -240,9 +284,10 @@ class Aliens(pygame.sprite.Sprite):
 
 
 class Player(pygame.sprite.Sprite):
-    def __init__(self):
+    def __init__(self, weapon):
         super().__init__(player_group)
         self.pos_x = 400
+        self.kills = 0
         self.rel = 0
         self.pos_y = 200
         self.hp = 100
@@ -252,7 +297,7 @@ class Player(pygame.sprite.Sprite):
         self.angle = 0
         self.last_hit = 0
         self.new_angle = 0
-        self.weapon = 'pistol'
+        self.weapon = weapon
         self.gipoten = 0
         self.count = 0
         self.die_count = 0
@@ -260,6 +305,7 @@ class Player(pygame.sprite.Sprite):
         self.image = player_imges['pistol'][0]
         self.bullet_sound = sounds['weapon']
         self.die_flag = False
+        self.collide_with_ship = False
         self.player_oogh = sounds['player_oogh']
         self.player_die = sounds['player_die']
         self.image_swap_count = 0
@@ -301,6 +347,10 @@ class Player(pygame.sprite.Sprite):
             if self.hitbox.colliderect(w.rect):
                 self.weapon = w.type
                 w.kill()
+        if pygame.sprite.spritecollide(self, health_group, 1):
+            self.hp = 100
+        if pygame.sprite.spritecollide(self, armor_group, 1):
+            self.armor = 100
         if self.orig != player_imges[self.weapon][0] or self.orig != player_imges[self.weapon][1]:
             self.image = player_imges[self.weapon][0]
             self.orig = player_imges[self.weapon][0]
@@ -379,6 +429,12 @@ class Player(pygame.sprite.Sprite):
                         self.hitbox.bottom = wall.rect.top
                         self.pos_y = self.hitbox.centery
 
+        for s in ship_group:
+            if pygame.sprite.collide_mask(self, s):
+                self.collide_with_ship = True
+            else:
+                self.collide_with_ship = False
+
         self.rotate()
 
     def die(self):
@@ -446,6 +502,8 @@ class Bullets(pygame.sprite.Sprite):
             self.wall_sound.play()
             self.kill()
         for i in aliens_group.sprites():
+            if i.pos.x >= 2300 or i.pos.x <= -380:
+                continue
             if pygame.sprite.collide_mask(self, i):
                 i.hit_sound.play()
                 i.in_hit = True
@@ -470,7 +528,9 @@ class Bullets(pygame.sprite.Sprite):
                         i.death_sound.play()
                         death_count = 0
                     i.kill()
+                    new_player.kills += 1
                 self.kill()
+                break
 
 
 svobod = []
@@ -481,6 +541,15 @@ def generate_level(level):
     numbers = range(-1, 2)
     for y in range(len(level)):
         for x in range(len(level[y])):
+            if level[y][x] == '!':
+                Empty('empty', x + 0.5, y + 0.5)
+                Armor('armor', x + 0.5, y + 0.5)
+            if level[y][x] == 'h':
+                Empty('empty', x + 0.5, y + 0.5)
+                Health('health', x + 0.5, y + 0.5)
+            if level[y][x] == 'S':
+                Empty('empty', x + 0.5, y + 0.5)
+                Ship(x + 0.5, y + 0.5)
             if level[y][x] == '0':
                 Empty('empty', x + 0.5, y + 0.5)
                 Weapon('pistol', x + 0.5, y + 0.5)
@@ -546,129 +615,210 @@ def generate_level(level):
 def check_press(pos):
     if 200 < pos[0] < 550 and 800 < pos[1] < 900:
         return 'restart'
+    elif 1600 < pos[0] < 1800 and 800 < pos[1] < 875:
+        return 'Menu'
+
+all_sprites = pygame.sprite.Group()
+player_group = pygame.sprite.Group()
+weapon_group = pygame.sprite.Group()
+aliens_group = pygame.sprite.Group()
+ship_group = pygame.sprite.Group()
+empty_group = pygame.sprite.Group()
+wall_group = pygame.sprite.Group()
+bullets_group = pygame.sprite.Group()
+health_group = pygame.sprite.Group()
+armor_group = pygame.sprite.Group()
+level_map = Map()
+new_player = Player('pistol')
 
 
-if __name__ == '__main__':
+def main(levels, weapon):
+    global all_sprites, player_group, weapon_group, aliens_group, ship_group, empty_group,\
+        wall_group, bullets_group, health_group, armor_group, level_map, new_player,screen
     all_sprites = pygame.sprite.Group()
     player_group = pygame.sprite.Group()
     weapon_group = pygame.sprite.Group()
     aliens_group = pygame.sprite.Group()
+    ship_group = pygame.sprite.Group()
     empty_group = pygame.sprite.Group()
     wall_group = pygame.sprite.Group()
     bullets_group = pygame.sprite.Group()
+    health_group = pygame.sprite.Group()
+    armor_group = pygame.sprite.Group()
     level_map = Map()
-    generate_level(level_map.load_level())
+    new_player = Player(weapon)
+    generate_level(level_map.load_level(levels[0]))
     clock = pygame.time.Clock()
     font = pygame.font.SysFont('Consolas', 20, bold=True)
     font_game_over = pygame.font.SysFont('Arial', 100, bold=True)
-    screen = pygame.display.set_mode(size)
-    new_player = Player()
     fon = pygame.mixer.Sound('data/sounds/Digiterra — Idle Empyrean (Argent Metal) (www.lightaudio.ru).mp3')
     fon.play(-1)
     new_player.obnov_mish()
-    background = pygame.image.load('data/background.jpg')
+    background = pygame.image.load('data/background.png')
     screen.blit(background, (0, 0))
     flg_aliens = False
     count_move = 0
+    menu_ = menu.Menu()
     count_die = 0
     game_over = pygame.image.load('data/game_over.png').convert_alpha()
     button_press = ''
-    space_flg =
+    space_flg = False
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 exit()
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    exit()
-                count = 0
+                    fon.stop()
+                    screen.blit(background, (0, 0))
+                    menu_.run()
+                if event.key == pygame.K_e and new_player.collide_with_ship:
+                    space_flg = True
             if event.type == MYEVENTTYPE:
                 flg_aliens = True
             if event.type == MOUSEBUTTONDOWN:
                 if new_player.die_flag:
                     button_press = check_press(event.pos)
         if space_flg:
-
-        if new_player.die_flag:
-            all_sprites.draw(screen)
-            weapon_group.draw(screen)
-            new_player.update()
-            player_group.draw(screen)
-            bullets_group.draw(screen)
-            aliens_group.draw(screen)
-            if new_player.die_count > 40:
-                screen.blit(game_over, (0, 442))
-                render = font_game_over.render('Restart', 0, (255, 255, 255))
-                screen.blit(render, (200, 800))
-
-                if button_press == 'restart':
-                    all_sprites = pygame.sprite.Group()
-                    player_group = pygame.sprite.Group()
-                    weapon_group = pygame.sprite.Group()
-                    aliens_group = pygame.sprite.Group()
-                    empty_group = pygame.sprite.Group()
-                    wall_group = pygame.sprite.Group()
-                    bullets_group = pygame.sprite.Group()
-                    level_map = Map()
-                    generate_level(level_map.load_level())
-                    clock = pygame.time.Clock()
-                    font = pygame.font.SysFont('Consolas', 20, bold=True)
-                    font_game_over = pygame.font.SysFont('Arial', 100, bold=True)
-                    screen = pygame.display.set_mode(size)
-                    new_player = Player()
-                    fon = pygame.mixer.Sound(
-                        'data/sounds/Digiterra — Idle Empyrean (Argent Metal) (www.lightaudio.ru).mp3')
-                    fon.play(-1)
-                    new_player.obnov_mish()
-                    background = pygame.image.load('data/background.jpg')
-                    screen.blit(background, (0, 0))
-                    flg_aliens = False
-                    count_move = 0
-                    game_over = pygame.image.load('data/game_over.png').convert_alpha()
-                    button_press = ''
+            pygame.mixer.stop()
+            flg = perhod.main(levels[1])
+            if not flg:
+                space_flg = False
+                all_sprites = pygame.sprite.Group()
+                player_group = pygame.sprite.Group()
+                weapon_group = pygame.sprite.Group()
+                aliens_group = pygame.sprite.Group()
+                empty_group = pygame.sprite.Group()
+                wall_group = pygame.sprite.Group()
+                bullets_group = pygame.sprite.Group()
+                ship_group = pygame.sprite.Group()
+                health_group = pygame.sprite.Group()
+                armor_group = pygame.sprite.Group()
+                level_map = Map()
+                generate_level(level_map.load_level(levels[0]))
+                clock = pygame.time.Clock()
+                font = pygame.font.SysFont('Consolas', 20, bold=True)
+                font_game_over = pygame.font.SysFont('Arial', 100, bold=True)
+                screen = pygame.display.set_mode(size)
+                new_player = Player(weapon)
+                fon = pygame.mixer.Sound(
+                    'data/sounds/Digiterra — Idle Empyrean (Argent Metal) (www.lightaudio.ru).mp3')
+                fon.play(-1)
+                new_player.obnov_mish()
+                background = pygame.image.load('data/background.png')
+                screen.blit(background, (0, 0))
+                flg_aliens = False
+                count_move = 0
+                game_over = pygame.image.load('data/game_over.png').convert_alpha()
+                button_press = ''
+            elif flg or flg == 0:
+                kills = new_player.kills + flg
+                menu_.sled_level(kills, new_player.weapon)
         else:
-            if count_move == 0:
-                if new_player.pos_x >= 1940:
-                    count_move = 129
-                elif new_player.pos_x <= -20:
-                    count_move = -129
-            if count_move > 0:
-                for alien in aliens_group.sprites():
-                    alien.pos.x -= 15
-                    alien.rect.center = alien.pos
-                wall_group.update(15)
-                empty_group.update(15)
-                weapon_group.update(15)
-                new_player.pos_x -= 15
-                count_move -= 1
-                screen.blit(background, (0, 0))
-            elif count_move < 0:
-                for alien in aliens_group.sprites():
-                    alien.pos.x += 15
-                    alien.rect.center = alien.pos
-                wall_group.update(-15)
-                empty_group.update(-15)
-                weapon_group.update(-15)
-                new_player.pos_x += 15
-                count_move += 1
-                screen.blit(background, (0, 0))
-            all_sprites.draw(screen)
-            weapon_group.draw(screen)
-            new_player.update()
-            player_group.draw(screen)
-            bullets_group.update()
-            bullets_group.draw(screen)
-            aliens_group.update(flg_aliens)
-            aliens_group.draw(screen)
-            pygame.draw.rect(screen, (0, 0, 0), (new_player.rect.centerx - 27, new_player.rect.centery - 35, 54, 10))
-            pygame.draw.rect(screen, (200, 0, 0),
-                             (new_player.rect.centerx - 25, new_player.rect.centery - 33, new_player.hp / 2, 6))
+            if new_player.die_flag:
+                all_sprites.draw(screen)
+                weapon_group.draw(screen)
+                new_player.update()
+                player_group.draw(screen)
+                bullets_group.draw(screen)
+                aliens_group.draw(screen)
+                ship_group.draw(screen)
+                health_group.draw(screen)
+                armor_group.draw(screen)
+                if new_player.die_count > 40:
+                    screen.blit(game_over, (0, 442))
+                    render = font_game_over.render('Restart', 0, (255, 255, 255))
+                    screen.blit(render, (200, 800))
+                    render = font_game_over.render('Menu', 0, (255, 255, 255))
+                    screen.blit(render, (1600, 800))
 
-            pygame.draw.rect(screen, (0, 0, 0), (new_player.rect.centerx - 27, new_player.rect.centery - 45, 54, 10))
-            pygame.draw.rect(screen, (200, 200, 200),
-                             (new_player.rect.centerx - 25, new_player.rect.centery - 43, new_player.armor / 2, 6))
-        pygame.display.set_caption(str(int(clock.get_fps())))
-        pygame.display.flip()
-        flg_aliens = False
-        clock.tick(60)
+                    if button_press == 'restart':
+                        all_sprites = pygame.sprite.Group()
+                        player_group = pygame.sprite.Group()
+                        weapon_group = pygame.sprite.Group()
+                        aliens_group = pygame.sprite.Group()
+                        empty_group = pygame.sprite.Group()
+                        ship_group = pygame.sprite.Group()
+                        wall_group = pygame.sprite.Group()
+                        bullets_group = pygame.sprite.Group()
+                        level_map = Map()
+                        generate_level(level_map.load_level(levels[0]))
+                        clock = pygame.time.Clock()
+                        font = pygame.font.SysFont('Consolas', 20, bold=True)
+                        font_game_over = pygame.font.SysFont('Arial', 100, bold=True)
+                        screen = pygame.display.set_mode(size)
+                        new_player = Player(weapon)
+                        fon = pygame.mixer.Sound(
+                            'data/sounds/Digiterra — Idle Empyrean (Argent Metal) (www.lightaudio.ru).mp3')
+                        fon.play(-1)
+                        new_player.obnov_mish()
+                        background = pygame.image.load('data/background.png')
+                        screen.blit(background, (0, 0))
+                        flg_aliens = False
+                        count_move = 0
+                        game_over = pygame.image.load('data/game_over.png').convert_alpha()
+                        button_press = ''
+                    elif button_press == 'Menu':
+                        fon.stop()
+                        screen.blit(background, (0, 0))
+                        menu_.run()
+            else:
+                if count_move == 0:
+                    if new_player.pos_x >= 1940:
+                        count_move = 129
+                    elif new_player.pos_x <= -20:
+                        count_move = -129
+                if count_move > 0:
+                    for alien in aliens_group.sprites():
+                        alien.pos.x -= 15
+                        alien.rect.center = alien.pos
+                    wall_group.update(15)
+                    empty_group.update(15)
+                    weapon_group.update(15)
+                    ship_group.update(15)
+                    health_group.update(15)
+                    armor_group.update(15)
+                    new_player.pos_x -= 15
+                    count_move -= 1
+                    screen.blit(background, (0, 0))
+                elif count_move < 0:
+                    for alien in aliens_group.sprites():
+                        alien.pos.x += 15
+                        alien.rect.center = alien.pos
+                    wall_group.update(-15)
+                    empty_group.update(-15)
+                    weapon_group.update(-15)
+                    ship_group.update(-15)
+                    health_group.update(-15)
+                    armor_group.update(-15)
+                    new_player.pos_x += 15
+                    count_move += 1
+                    screen.blit(background, (0, 0))
+                all_sprites.draw(screen)
+                weapon_group.draw(screen)
+                new_player.update()
+                player_group.draw(screen)
+                bullets_group.update()
+                bullets_group.draw(screen)
+                aliens_group.update(flg_aliens)
+                aliens_group.draw(screen)
+                ship_group.draw(screen)
+                health_group.draw(screen)
+                armor_group.draw(screen)
+                pygame.draw.rect(screen, (0, 0, 0),
+                                 (new_player.rect.centerx - 27, new_player.rect.centery - 35, 54, 10))
+                pygame.draw.rect(screen, (200, 0, 0),
+                                 (new_player.rect.centerx - 25, new_player.rect.centery - 33, new_player.hp / 2, 6))
+
+                pygame.draw.rect(screen, (0, 0, 0),
+                                 (new_player.rect.centerx - 27, new_player.rect.centery - 45, 54, 10))
+                pygame.draw.rect(screen, (200, 200, 200),
+                                 (new_player.rect.centerx - 25, new_player.rect.centery - 43, new_player.armor / 2, 6))
+                if new_player.collide_with_ship:
+                    render = font.render('Нажмите E для посадки', 0, (255, 255, 255))
+                    screen.blit(render, (ship_group.sprites()[0].rect.x, ship_group.sprites()[0].rect.y - 25))
+            pygame.display.set_caption(str(int(clock.get_fps())))
+            pygame.display.flip()
+            flg_aliens = False
+            clock.tick(60)
 # assds

@@ -2,8 +2,7 @@ class Map:
     def __init__(self):
         self.level = []
 
-    def load_level(self):
-        filename = 'level0.txt'
+    def load_level(self, filename):
         # читаем уровень, убирая символы перевода строки
         with open(filename, 'r') as mapFile:
             self.level = list(map(lambda line: line.strip(), mapFile))
