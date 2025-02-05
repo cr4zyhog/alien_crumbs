@@ -1,10 +1,13 @@
 import random
+import sys
+
 import pygame
 import math
 
 import menu
 import perhod
 from pygame import MOUSEBUTTONDOWN
+
 from map import Map
 
 pygame.init()
@@ -187,6 +190,9 @@ class Aliens(pygame.sprite.Sprite):
 
     def update(self, flag=False):
         pos_x = self.pos.x
+        fps = int(clock.get_fps())
+        if fps == 0:
+            fps = 1000
         if pos_x >= 2300 or pos_x <= -380:
             return 0
         if self.in_hit:
@@ -203,8 +209,8 @@ class Aliens(pygame.sprite.Sprite):
         self.look_for_player()
         if not self.see_player:
             self.acc = pygame.math.Vector2(0, 0)
-            self.vel.x += self.speed_x
-            self.vel.y += self.speed_y
+            self.vel.x += (self.speed_x * 60) / fps
+            self.vel.y += (self.speed_y * 60) / fps
             self.count += 1
         else:
             self.acc = pygame.math.Vector2(0, 0)
@@ -215,13 +221,13 @@ class Aliens(pygame.sprite.Sprite):
             cos_a = math.cos(self.angle)
             speed = new_player.speed
             if player_vec.x > self.pos.x:
-                self.vel.x += speed
+                self.vel.x += speed / fps
             if player_vec.x < self.pos.x:
-                self.vel.x -= speed
+                self.vel.x -= speed / fps
             if player_vec.y > self.pos.y:
-                self.vel.y += speed
+                self.vel.y += speed / fps
             if player_vec.y < self.pos.y:
-                self.vel.y -= speed
+                self.vel.y -= speed / fps
 
         self.acc += self.vel * -0.47
         self.vel += self.acc
@@ -292,7 +298,7 @@ class Player(pygame.sprite.Sprite):
         self.pos_y = 200
         self.hp = 100
         self.armor = 100
-        self.speed = 7
+        self.speed = 420
         self.pos_mouse = (0, 0)
         self.angle = 0
         self.last_hit = 0
@@ -309,6 +315,9 @@ class Player(pygame.sprite.Sprite):
         self.player_oogh = sounds['player_oogh']
         self.player_die = sounds['player_die']
         self.image_swap_count = 0
+        self.pos = pygame.Vector2(self.pos_x, self.pos_y)
+        self.vel = pygame.Vector2(0, 0)
+        self.acc = pygame.Vector2(0, 0)
         self.orig = self.image
         self.rect = self.image.get_rect(center=(round(self.pos_x), round(self.pos_y)))
         self.rect_orig = self.image.get_rect()
@@ -358,8 +367,9 @@ class Player(pygame.sprite.Sprite):
         self.angle = 0
         self.rotate()
         self.angle = angle_orr
-        pos_x = self.pos_x
-        pos_y = self.pos_y
+        fps = int(clock.get_fps())
+        if fps == 0:
+            fps = 1000
         self.update_mouse(pygame.mouse.get_pos())
         mouse_keys = pygame.mouse.get_pressed()
         if mouse_keys[0]:
@@ -378,56 +388,37 @@ class Player(pygame.sprite.Sprite):
                     self.count = pygame.time.get_ticks()
                     self.flag = not self.flag
                     self.attack()
+        pos_x = self.pos_x
+        pos_y = self.pos_y
+        self.acc = pygame.Vector2(0, 0)
+
+        # move on buttonpress
+        keys = pygame.key.get_pressed()
         if keys[pygame.K_w]:
-            # self.gipoten -= self.speed
-            self.pos_y -= self.speed
-            self.hitbox.center = (self.pos_x, self.pos_y)
+            self.vel.y -= self.speed / fps
         if keys[pygame.K_s]:
-            # self.gipoten += self.speed
-            self.pos_y += self.speed
-            self.hitbox.center = (self.pos_x, self.pos_y)
-        if keys[pygame.K_d]:
-            # self.angle = (self.angle + (300 / self.gipoten)) % 360
-            self.pos_x += self.speed
-            self.hitbox.center = (self.pos_x, self.pos_y)
+            self.vel.y += self.speed / fps
         if keys[pygame.K_a]:
-            # self.angle = (self.angle - (300 / self.gipoten)) % 360
-            self.pos_x -= self.speed
-            self.hitbox.center = (self.pos_x, self.pos_y)
-        if keys[pygame.K_UP]:
-            self.mouse_pos = (self.mouse_pos[0], self.mouse_pos[1] - self.speed)
-            self.update_mouse(self.mouse_pos)
-        if keys[pygame.K_DOWN]:
-            self.mouse_pos = (self.mouse_pos[0], self.mouse_pos[1] + self.speed)
-            self.update_mouse(self.mouse_pos)
-        if keys[pygame.K_LEFT]:
-            self.mouse_pos = (self.mouse_pos[0] - self.speed, self.mouse_pos[1])
-            self.update_mouse(self.mouse_pos)
-        if keys[pygame.K_RIGHT]:
-            self.mouse_pos = (self.mouse_pos[0] + self.speed, self.mouse_pos[1])
-            self.update_mouse(self.mouse_pos)
-        # center = (pygame.math.Vector2(self.mouse_pos) + pygame.math.Vector2(0, -self.gipoten).rotate(-self.angle))
-        # print(center.angle_to(pygame.math.Vector2(self.mouse_pos)))
-        # self.rect = self.image.get_rect(center=(round(abs(center.x)), round(abs(center.y))))
-        # pygame.draw.line(screen, (255, 0, 0), (0, 0), (self.mouse_pos[0], self.mouse_pos[1]))
-        # pygame.draw.line(screen, (0, 255, 0), (0, 0), (pygame.math.Vector2(10, -self.gipoten).rotate(-self.angle).x, pygame.math.Vector2(10, -self.gipoten).rotate(-self.angle).y))
-        # pygame.draw.line(screen, (0, 0, 255), (0, 0), (center.x, center.y))
-        for wall in wall_group.sprites():
-            if self.hitbox.colliderect(wall):
-                if self.hitbox.right >= wall.rect.left or self.hitbox.left < wall.rect.right:
-                    if self.hitbox.right - wall.rect.left > tile_width:
-                        self.hitbox.left = wall.rect.right
-                        self.pos_x = self.hitbox.centerx
-                    elif self.hitbox.right - wall.rect.left < tile_width:
-                        self.hitbox.right = wall.rect.left
-                        self.pos_x = self.hitbox.centerx
-                if self.hitbox.top <= wall.rect.bottom or self.hitbox.bottom > wall.rect.top:
-                    if self.hitbox.bottom - wall.rect.top > tile_width:
-                        self.hitbox.top = wall.rect.bottom
-                        self.pos_y = self.hitbox.centery
-                    elif self.hitbox.bottom - wall.rect.top < tile_width:
-                        self.hitbox.bottom = wall.rect.top
-                        self.pos_y = self.hitbox.centery
+            self.vel.x -= self.speed / fps
+        if keys[pygame.K_d]:
+            self.vel.x += self.speed / fps
+
+        self.acc += self.vel * -0.41
+        self.vel += self.acc
+
+        if self.vel.x != 0:
+            self.pos.x += round(self.vel.x + 0.5 * self.acc.x, 1)
+            self.hitbox.center = self.pos
+            self.check_collision('x')
+
+        if self.vel.y != 0:
+            self.pos.y += round(self.vel.y + 0.5 * self.acc.y, 1)
+            self.hitbox.center = self.pos
+            self.check_collision('y')
+
+        self.rect.center = self.pos
+        self.hitbox.center = self.pos
+        self.pos_x, self.pos_y = self.rect.center
 
         for s in ship_group:
             if pygame.sprite.collide_mask(self, s):
@@ -436,6 +427,27 @@ class Player(pygame.sprite.Sprite):
                 self.collide_with_ship = False
 
         self.rotate()
+
+    def check_collision(self, axis):
+        for wall in wall_group:
+            if wall.rect.x > 2300 or wall.rect.x < -300:
+                continue
+            if axis == 'x':
+                if abs(wall.rect.centerx - self.pos.x) < 100:
+                    if self.hitbox.colliderect(wall):
+                        if self.vel.x < 0:
+                            self.hitbox.left = wall.rect.right
+                        elif self.vel.x > 0:
+                            self.hitbox.right = wall.rect.left
+                        self.pos.x = self.hitbox.centerx
+            else:
+                if abs(wall.rect.centery - self.pos.y) < 100:
+                    if self.hitbox.colliderect(wall):
+                        if self.vel.y < 0:
+                            self.hitbox.top = wall.rect.bottom
+                        elif self.vel.y > 0:
+                            self.hitbox.bottom = wall.rect.top
+                        self.pos.y = self.hitbox.centery
 
     def die(self):
         pygame.mixer.stop()
@@ -485,52 +497,61 @@ class Bullets(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(center=pos)
         self.monsterkill = sounds['monsterkill']
 
-    def update(self):
+    def move(self, move):
+        self.rect.centerx = self.rect.centerx - move
+
+    def update(self, move=0):
         global death_count
         global tick_from_death
         # парился с этой фигней два часа, а почему-то нужно было угол поделить на 57
-        angle = self.angle / 57.3
-        sin_a = math.sin(angle)
-        cos_a = math.cos(angle)
-        x = self.rect.centerx
-        y = self.rect.centery
-        x += (30 * sin_a)
-        y += (30 * cos_a)
-        self.rect = self.image.get_rect(center=(x, y))
-        self.count += 1
-        if pygame.sprite.spritecollideany(self, wall_group):
-            self.wall_sound.play()
-            self.kill()
-        for i in aliens_group.sprites():
-            if i.pos.x >= 2300 or i.pos.x <= -380:
-                continue
-            if pygame.sprite.collide_mask(self, i):
-                i.hit_sound.play()
-                i.in_hit = True
-                i.image = alien_images[2]
-                if new_player.weapon == 'pistol':
-                    i.hp -= 10
-                elif new_player.weapon == 'avtomat':
-                    i.hp -= 25
-                elif new_player.weapon == 'pulemet':
-                    i.hp -= 20
-                i.see_player = True
-                i.last_seen_player = pygame.time.get_ticks()
-                if i.hp <= 0:
-                    if abs(tick_from_death - pygame.time.get_ticks()) <= 2000:
-                        death_count += 1
-                        if death_count >= 4:
-                            self.monsterkill.play()
-                        else:
-                            i.death_sound.play()
-                    else:
-                        tick_from_death = pygame.time.get_ticks()
-                        i.death_sound.play()
-                        death_count = 0
-                    i.kill()
-                    new_player.kills += 1
+        if move != 0:
+            self.move(move)
+        else:
+            angle = self.angle / 57.3
+            fps = int(clock.get_fps())
+            if fps == 0:
+                fps = 1000
+            sin_a = math.sin(angle)
+            cos_a = math.cos(angle)
+            x = self.rect.centerx
+            y = self.rect.centery
+            x += (1800 * sin_a) / fps
+            y += (1800 * cos_a) / fps
+            self.rect = self.image.get_rect(center=(x, y))
+            self.count += 1
+            if pygame.sprite.spritecollideany(self, wall_group):
+                self.wall_sound.play()
                 self.kill()
-                break
+            for i in aliens_group.sprites():
+                if i.pos.x >= 2300 or i.pos.x <= -380:
+                    continue
+                if pygame.sprite.collide_mask(self, i):
+                    i.hit_sound.play()
+                    i.in_hit = True
+                    i.image = alien_images[2]
+                    if new_player.weapon == 'pistol':
+                        i.hp -= 10
+                    elif new_player.weapon == 'avtomat':
+                        i.hp -= 25
+                    elif new_player.weapon == 'pulemet':
+                        i.hp -= 20
+                    i.see_player = True
+                    i.last_seen_player = pygame.time.get_ticks()
+                    if i.hp <= 0:
+                        if abs(tick_from_death - pygame.time.get_ticks()) <= 2000:
+                            death_count += 1
+                            if death_count >= 4:
+                                self.monsterkill.play()
+                            else:
+                                i.death_sound.play()
+                        else:
+                            tick_from_death = pygame.time.get_ticks()
+                            i.death_sound.play()
+                            death_count = 0
+                        i.kill()
+                        new_player.kills += 1
+                    self.kill()
+                    break
 
 
 svobod = []
@@ -630,11 +651,13 @@ health_group = pygame.sprite.Group()
 armor_group = pygame.sprite.Group()
 level_map = Map()
 new_player = Player('pistol')
+clock = pygame.time.Clock()
+pos_x_x = 0
 
 
 def main(levels, weapon):
     global all_sprites, player_group, weapon_group, aliens_group, ship_group, empty_group,\
-        wall_group, bullets_group, health_group, armor_group, level_map, new_player,screen
+        wall_group, bullets_group, health_group, armor_group, level_map, new_player,screen, clock, pos_x_x
     all_sprites = pygame.sprite.Group()
     player_group = pygame.sprite.Group()
     weapon_group = pygame.sprite.Group()
@@ -660,13 +683,19 @@ def main(levels, weapon):
     count_move = 0
     menu_ = menu.Menu()
     count_die = 0
+    pos_nuzh = 0
+    flg_nuzh = 0
+    player_posx = 0
+    pygame.display.set_caption('Alien Crumbs')
+    pygame.display.set_icon(pygame.image.load('data/aliens/alien1/alien_1.png'))
     game_over = pygame.image.load('data/game_over.png').convert_alpha()
     button_press = ''
     space_flg = False
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                exit()
+                pygame.quit()
+                sys.exit()
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     fon.stop()
@@ -681,8 +710,11 @@ def main(levels, weapon):
                     button_press = check_press(event.pos)
         if space_flg:
             pygame.mixer.stop()
-            flg = perhod.main(levels[1])
-            if not flg:
+            flg, kills = perhod.main(levels[1])
+            if flg:
+                kills = new_player.kills + flg
+                menu_.sled_level(kills, new_player.weapon)
+            elif not flg:
                 space_flg = False
                 all_sprites = pygame.sprite.Group()
                 player_group = pygame.sprite.Group()
@@ -711,9 +743,6 @@ def main(levels, weapon):
                 count_move = 0
                 game_over = pygame.image.load('data/game_over.png').convert_alpha()
                 button_press = ''
-            elif flg or flg == 0:
-                kills = new_player.kills + flg
-                menu_.sled_level(kills, new_player.weapon)
         else:
             if new_player.die_flag:
                 all_sprites.draw(screen)
@@ -721,10 +750,10 @@ def main(levels, weapon):
                 new_player.update()
                 player_group.draw(screen)
                 bullets_group.draw(screen)
-                aliens_group.draw(screen)
                 ship_group.draw(screen)
                 health_group.draw(screen)
                 armor_group.draw(screen)
+                aliens_group.draw(screen)
                 if new_player.die_count > 40:
                     screen.blit(game_over, (0, 442))
                     render = font_game_over.render('Restart', 0, (255, 255, 255))
@@ -763,36 +792,51 @@ def main(levels, weapon):
                         screen.blit(background, (0, 0))
                         menu_.run()
             else:
+                fps = int(clock.get_fps())
+                if fps == 0:
+                    fps = 1000
                 if count_move == 0:
-                    if new_player.pos_x >= 1940:
-                        count_move = 129
-                    elif new_player.pos_x <= -20:
-                        count_move = -129
-                if count_move > 0:
-                    for alien in aliens_group.sprites():
-                        alien.pos.x -= 15
-                        alien.rect.center = alien.pos
-                    wall_group.update(15)
-                    empty_group.update(15)
-                    weapon_group.update(15)
-                    ship_group.update(15)
-                    health_group.update(15)
-                    armor_group.update(15)
-                    new_player.pos_x -= 15
-                    count_move -= 1
+                    if new_player.pos.x >= 1940 and flg_nuzh == 0:
+                        player_posx = 1920
+                        flg_nuzh = 1
+                    elif new_player.pos.x <= -20 and flg_nuzh == 0:
+                        player_posx = -1920
+                        flg_nuzh = -1
+                if flg_nuzh > 0:
+                    if player_posx > 0:
+                        speed = round((15 * 120) / fps)
+                        for alien in aliens_group.sprites():
+                            alien.pos.x -= speed
+                            alien.rect.center = alien.pos
+                        wall_group.update(speed)
+                        empty_group.update(speed)
+                        weapon_group.update(speed)
+                        ship_group.update(speed)
+                        health_group.update(speed)
+                        armor_group.update(speed)
+                        new_player.pos.x -= speed
+                        player_posx -= speed
+                        bullets_group.update(speed)
+                    else:
+                        flg_nuzh = 0
                     screen.blit(background, (0, 0))
-                elif count_move < 0:
-                    for alien in aliens_group.sprites():
-                        alien.pos.x += 15
-                        alien.rect.center = alien.pos
-                    wall_group.update(-15)
-                    empty_group.update(-15)
-                    weapon_group.update(-15)
-                    ship_group.update(-15)
-                    health_group.update(-15)
-                    armor_group.update(-15)
-                    new_player.pos_x += 15
-                    count_move += 1
+                elif flg_nuzh < 0:
+                    if player_posx < 0:
+                        speed = round((15 * 120) / fps, 100)
+                        for alien in aliens_group.sprites():
+                            alien.pos.x += speed
+                            alien.rect.center = alien.pos
+                        wall_group.update(-speed)
+                        empty_group.update(-speed)
+                        weapon_group.update(-speed)
+                        ship_group.update(-speed)
+                        health_group.update(-speed)
+                        armor_group.update(-speed)
+                        bullets_group.update(-speed)
+                        new_player.pos.x += speed
+                        player_posx += speed
+                    else:
+                        flg_nuzh = 0
                     screen.blit(background, (0, 0))
                 all_sprites.draw(screen)
                 weapon_group.draw(screen)
@@ -801,10 +845,10 @@ def main(levels, weapon):
                 bullets_group.update()
                 bullets_group.draw(screen)
                 aliens_group.update(flg_aliens)
-                aliens_group.draw(screen)
                 ship_group.draw(screen)
                 health_group.draw(screen)
                 armor_group.draw(screen)
+                aliens_group.draw(screen)
                 pygame.draw.rect(screen, (0, 0, 0),
                                  (new_player.rect.centerx - 27, new_player.rect.centery - 35, 54, 10))
                 pygame.draw.rect(screen, (200, 0, 0),
@@ -817,8 +861,7 @@ def main(levels, weapon):
                 if new_player.collide_with_ship:
                     render = font.render('Нажмите E для посадки', 0, (255, 255, 255))
                     screen.blit(render, (ship_group.sprites()[0].rect.x, ship_group.sprites()[0].rect.y - 25))
-            pygame.display.set_caption(str(int(clock.get_fps())))
             pygame.display.flip()
             flg_aliens = False
-            clock.tick(60)
+            clock.tick(1500)
 # assds

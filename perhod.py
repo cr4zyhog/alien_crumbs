@@ -1,4 +1,5 @@
 import pygame
+import sys
 
 import map
 import menu
@@ -13,7 +14,7 @@ pygame.time.set_timer(MYEVENTTYPE, 250)
 
 tile_images = {
     'stone': pygame.transform.scale(pygame.image.load('data/Space/Stone/stone.png'),
-                                    (tile_width - 15, tile_height - 15)).convert_alpha(),
+                                    (tile_width - 30, tile_height - 30)).convert_alpha(),
     'alien': pygame.image.load('data/Space/alien/alien_ship.png').convert_alpha(),
     'space': pygame.image.load('data/Space/space.png').convert_alpha()
 }
@@ -68,7 +69,10 @@ class Stone(pygame.sprite.Sprite):
             tile_width * pos_x, tile_height * pos_y)
 
     def update(self, dvizh):
-        self.angle += 5
+        fps = int(clock.get_fps())
+        if fps == 0:
+            fps = 1000
+        self.angle += 300 / fps
         self.image = pygame.transform.rotate(self.orig, self.angle)
         self.rect = self.image.get_rect(center=(self.rect.centerx, self.rect.centery + dvizh))
 
@@ -108,9 +112,12 @@ class Player(pygame.sprite.Sprite):
         self.count_engine = 0
 
     def update(self):
+        fps = int(clock.get_fps())
+        if fps == 0:
+            fps = 1000
         if self.is_die:
             try:
-                self.image = ship_die[self.count_image_die % 60]
+                self.image = ship_die[self.count_image_die // 5]
                 self.count_image_die += 1
                 self.dvizh = 0
             except IndexError:
@@ -134,10 +141,14 @@ class Player(pygame.sprite.Sprite):
                         self.count_time = pygame.time.get_ticks()
                         self.pos_x += tile_width
             for i in alien_group.sprites():
+                if i.rect.centery >= 2300 or i.rect.centery <= -380:
+                    continue
                 if pygame.sprite.collide_mask(self, i):
                     self.is_die = True
                     self.boom.play()
             for i in stone_group.sprites():
+                if i.rect.centery >= 2300 or i.rect.centery <= -380:
+                    continue
                 if pygame.sprite.collide_mask(self, i):
                     self.is_die = True
                     self.boom.play()
@@ -145,7 +156,7 @@ class Player(pygame.sprite.Sprite):
                 self.end = True
 
             self.rect = self.image.get_rect().move(self.pos_x, self.pos_y)
-            self.dvizh += 0.015
+            self.dvizh += (0.007 * 60) / fps
 
     def attack(self):
         self.vistrel.play()
@@ -170,6 +181,9 @@ class Bullets(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(center=pos)
 
     def update(self):
+        fps = int(clock.get_fps())
+        if fps == 0:
+            fps = 1000
         if self.count_image % 5 == 0:
             if self.image == self.image_list[0]:
                 self.image = self.image_list[1]
@@ -178,7 +192,7 @@ class Bullets(pygame.sprite.Sprite):
             self.count_image += 1
         x = self.rect.centerx
         y = self.rect.centery
-        y -= 50
+        y -= 3000 / fps
         self.rect = self.image.get_rect(center=(x, y))
         self.count += 1
         for i in alien_group.sprites():
@@ -221,8 +235,11 @@ def check_press(pos):
         return 'Menu'
 
 
+clock = pygame.time.Clock()
+
+
 def main(level):
-    global screen, alien_group, player_group, stone_group, end_group, bullets_group, engine_group
+    global screen, alien_group, player_group, stone_group, end_group, bullets_group, engine_group, clock
     screen = pygame.display.set_mode(size)
     end_group = pygame.sprite.Group()
     alien_group = pygame.sprite.Group()
@@ -242,10 +259,13 @@ def main(level):
     font_game_over = pygame.font.SysFont('Arial', 100, bold=True)
     screen.blit(background, (0, 0))
     button_press = ''
+    pygame.display.set_caption('Alien Crumbs')
+    pygame.display.set_icon(pygame.image.load('data/aliens/alien1/alien_1.png'))
     while True:
         for event in pygame.event.get():
             if event == pygame.QUIT:
-                exit()
+                pygame.quit()
+                sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if ship_player.is_die:
                     button_press = check_press(event.pos)
@@ -255,7 +275,7 @@ def main(level):
         if ship_player.end:
             screen.blit(background, (0, 0))
             pygame.mixer.music.stop()
-            return ship_player.kills
+            return (True, ship_player.kills)
         if ship_player.count_image_die == 1000:
             pygame.draw.line(screen, (77, 77, 77), (520, 0), (520, 1080))
             pygame.draw.line(screen, (77, 77, 77), (695, 0), (695, 1080))
@@ -273,18 +293,21 @@ def main(level):
             render = font_game_over.render('Menu', 0, (255, 255, 255))
             screen.blit(render, (1600, 800))
             pygame.display.flip()
-            clock.tick(60)
+            clock.tick(165)
             if button_press == 'restart':
                 ship_player.kills = 0
-                return False
+                return (False, ship_player.kills)
             elif button_press == 'Menu':
                 pygame.mixer.stop()
                 screen.blit(background, (0, 0))
                 menu_.run()
         else:
-            end_group.update(ship_player.dvizh)
-            alien_group.update(ship_player.dvizh)
-            stone_group.update(ship_player.dvizh)
+            fps = int(clock.get_fps())
+            if fps == 0:
+                fps = 1000
+            end_group.update((ship_player.dvizh * 60) / fps)
+            alien_group.update((ship_player.dvizh * 60) / fps)
+            stone_group.update((ship_player.dvizh * 60) / fps)
             bullets_group.update()
             screen.blit(background, (0, 0))
             pygame.draw.line(screen, (77, 77, 77), (520, 0), (520, 1080))
@@ -298,4 +321,4 @@ def main(level):
             player_group.draw(screen)
             bullets_group.draw(screen)
             pygame.display.flip()
-            clock.tick(60)
+            clock.tick(165)
