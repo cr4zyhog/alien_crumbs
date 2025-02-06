@@ -822,7 +822,7 @@ def main(levels, weapon):
                     screen.blit(background, (0, 0))
                 elif flg_nuzh < 0:
                     if player_posx < 0:
-                        speed = round((15 * 120) / fps, 100)
+                        speed = round((15 * 120) / fps)
                         for alien in aliens_group.sprites():
                             alien.pos.x += speed
                             alien.rect.center = alien.pos
